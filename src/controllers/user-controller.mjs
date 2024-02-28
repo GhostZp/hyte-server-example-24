@@ -1,3 +1,5 @@
+import bcrypt from 'bcryptjs';
+import {validationResult} from 'express-validator';
 import {
   deleteUserById,
   insertUser,
@@ -5,8 +7,6 @@ import {
   selectUserById,
   updateUserById,
 } from '../models/user-model.mjs';
-
-// TODO: implement route handlers below for users (real data)
 
 const getUsers = async (req, res) => {
   const result = await listAllUsers();
@@ -26,24 +26,48 @@ const getUserById = async (req, res) => {
 
 const postUser = async (req, res) => {
   const {username, password, email} = req.body;
+  // validation errors can be retrieved from the request object (added by express-validator middleware)
+  const validationErrors = validationResult(req);
+  // check if any validation errors
+  console.log('User validation error');
   // check that all needed fields are included in request
-  if (username && password && email) {
-    const result = await insertUser(req.body);
-    if (result.error) {
+  if (validationErrors.isEmpty()) {
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+    const result = await insertUser({
+      username,
+      email,
+      password: hashedPassword,
+    }, next);
+/*     if (result.error) {
+      const error = new Error('');
       return res.status(result.error).json(result);
-    }
+    } */
     return res.status(201).json(result);
   } else {
-    return res.status(400).json({error: 400, message: 'bad request'});
+    const error = new Error('bad request');
+    error.status = 400;
+    error.errors = validationErrors.errors;
+    return next(error);
   }
 };
 
+// Only user authenticated by token can update own data
 const putUser = async (req, res) => {
-  const user_id = req.params.id;
+  // Get userinfo from req.user object extracted from token
+  const user_id = req.user.user_id;
   const {username, password, email} = req.body;
+  // hash password if included in request
+  const salt = await bcrypt.genSalt(10);
+  const hashedPassword = await bcrypt.hash(password, salt);
   // check that all needed fields are included in request
   if (user_id && username && password && email) {
-    const result = await updateUserById({user_id, ...req.body});
+    const result = await updateUserById({
+      user_id,
+      username,
+      password: hashedPassword,
+      email,
+    });
     if (result.error) {
       return res.status(result.error).json(result);
     }
@@ -61,23 +85,4 @@ const deleteUser = async (req, res) => {
   return res.json(result);
 };
 
-// Dummy login with mock data, returns user object if username & password match
-const postLogin = (req, res) => {
-  const userCreds = req.body;
-  if (!userCreds.username || !userCreds.password) {
-    return res.sendStatus(400);
-  }
-  const userFound = users.find((user) => user.username == userCreds.username);
-  // user not found
-  if (!userFound) {
-    return res.status(403).json({error: 'username/password invalid'});
-  }
-  // check if posted password matches to user found password
-  if (userFound.password === userCreds.password) {
-    res.json({message: 'logged in successfully', user: userFound});
-  } else {
-    return res.status(403).json({error: 'username/password invalid'});
-  }
-};
-
-export {getUsers, getUserById, postUser, putUser, postLogin, deleteUser};
+export {getUsers, getUserById, postUser, putUser, deleteUser};

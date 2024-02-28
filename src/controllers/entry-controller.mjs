@@ -1,7 +1,16 @@
-import {listAllEntries, findEntryById, addEntry} from "../models/entry-model.mjs";
+import {
+  listAllEntries,
+  findEntryById,
+  addEntry,
+  deleteEntryById,
+  updateEntryById,
+  listAllEntriesByUserId,
+} from '../models/entry-model.mjs';
 
 const getEntries = async (req, res) => {
-  const result = await listAllEntries();
+  // return only logged in user's own entries
+  // - get user's id from token (req.user.user_id)
+  const result = await listAllEntriesByUserId(req.user.user_id);
   if (!result.error) {
     res.json(result);
   } else {
@@ -35,14 +44,27 @@ const postEntry = async (req, res) => {
   }
 };
 
-const putEntry = (req, res) => {
-  // placeholder for future implementation
-  res.sendStatus(200);
+const putEntry = async (req, res) => {
+  const entry_id = req.params.id;
+  const {entry_date, mood, weight, sleep_hours, notes} = req.body;
+  // check that all needed fields are included in request
+  if ((entry_date || weight || mood || sleep_hours || notes) && entry_id) {
+    const result = await updateEntryById({entry_id, ...req.body});
+    if (result.error) {
+      return res.status(result.error).json(result);
+    }
+    return res.status(201).json(result);
+  } else {
+    return res.status(400).json({error: 400, message: 'bad request'});
+  }
 };
 
-const deleteEntry = (req, res) => {
-  // placeholder for future implementation
-  res.sendStatus(200);
+const deleteEntry = async (req, res) => {
+  const result = await deleteEntryById(req.params.id);
+  if (result.error) {
+    return res.status(result.error).json(result);
+  }
+  return res.json(result);
 };
 
 export {getEntries, getEntryById, postEntry, putEntry, deleteEntry};
