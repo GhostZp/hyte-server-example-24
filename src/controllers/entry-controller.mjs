@@ -1,3 +1,4 @@
+import { validationResult } from 'express-validator';
 import {
   findEntryById,
   addEntry,
@@ -27,9 +28,7 @@ const getEntryById = async (req, res) => {
   }
 };
 
-const postEntry = async (req, res) => {
-  // Destruct properties from req.body to separate variables,
-  // convert property names with underscores to camelCase variable names
+const postEntry = async (req, res, next) => {
   const {
     user_id: userId,
     entry_date: entryDate,
@@ -38,17 +37,24 @@ const postEntry = async (req, res) => {
     sleep_hours: sleepHours,
     notes,
   } = req.body;
-  if (entryDate && (weight || mood || sleepHours || notes) && userId) {
-    const result = await addEntry(req.body);
-    if (result.entry_id) {
-      res.status(201);
-      res.json({message: 'New entry added.', ...result});
-    } else {
-      res.status(500);
-      res.json(result);
-    }
+  const validationErrors = validationResult(req);
+  console.log('entry validation errors', validationErrors);
+  if (validationErrors.isEmpty()) {
+    const salt = await bcrypt.genSalt(10);
+    const result = await insertUser({
+      user_id: userId,
+      entry_date: entryDate,
+      mood,
+      weight,
+      sleep_hours: sleepHours,
+      notes,
+    }, next);
+    return res.status(201).json(result);
   } else {
-    res.sendStatus(400);
+    const error = new Error('bad request');
+    error.status = 400;
+    error.errors = validationErrors.errors;
+    return next(error);
   }
 };
 
